@@ -2,15 +2,7 @@
 .vscode-test/**
 src/**
 .gitignore
-.yarnrc
-vsc-extension-quickstart.md
-**/tsconfig.json
-**/eslint.config.mjs
+eslint.config.mjs
+tsconfig.json
 **/*.map
 **/*.ts
-**/.vscode-test.*
-.roo/**
-node_modules/**
-*.vsix
-.DS_Store
-Thumbs.db

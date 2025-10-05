@@ -1,57 +1,38 @@
 # Extended Actions
 
-Additional actions for VSCode including save all files without formatting or save participants.
+Additional useful commands for VS Code.
 
 ## Features
 
-This extension provides additional commands to enhance your VSCode workflow:
+### Save All Without Format
 
-### Save All Without Formatting
+Saves all dirty files without running save participants (formatters, organizers, etc.).
 
-- **Command**: `Save All Without Save Participants`
-- **What it does**: Saves all modified files without running formatters or save participants
-- **Use case**: When you want to quickly save all files without triggering automatic formatting or other save-time operations
+- **Command**: `File: Save All Without Format`
+- **Command ID**: `vscode-extended-actions.saveAllWithoutFormat`
 
-This is particularly useful when:
+This is useful when you want to save all files quickly without triggering automatic formatting.
 
-- You have multiple files with unsaved changes
-- You want to preserve the current formatting temporarily
-- You need to save files quickly without waiting for formatters to run
-- You're working with files where formatting might cause unwanted changes
+### Create and Open Folder
+
+Creates a new folder and opens it in VS Code.
+
+- **Command**: `File: Create and Open New Folder`
+- **Command ID**: `vscode-extended-actions.createAndOpenFolder`
+
+This command allows you to quickly create a new folder and open it in VS Code. You can choose to open it in the current window, a new window, or add it to the current workspace.
 
 ## Usage
 
-1. Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
-2. Type "Save All Without Save Participants"
+1. Open the Command Palette (`Cmd+Shift+P` on macOS, `Ctrl+Shift+P` on Windows/Linux)
+2. Type "Save All Without Format" or "Create and Open New Folder"
 3. Press Enter
 
-The extension will:
+You can also assign a keyboard shortcut to this command in your keybindings.json:
 
-- Find all files with unsaved changes
-- Save each file without running formatters or save participants
-- Preserve your current active editor
-- Log the operation progress to the console
-
-## Requirements
-
-- VSCode 1.100.0 or higher
-
-## Extension Settings
-
-This extension does not contribute any settings.
-
-## Known Issues
-
-None at this time. Please report issues on the [GitHub repository](https://github.com/statiolake/vscode-extended-actions/issues).
-
-## Release Notes
-
-### 0.1.0
-
-Initial release of Extended Actions.
-
-- Added "Save All Without Save Participants" command
-
----
-
-**Enjoy!**
+```json
+{
+  "key": "cmd+k s",
+  "command": "vscode-extended-actions.saveAllWithoutFormat"
+}
+```

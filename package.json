@@ -1,39 +1,41 @@
 {
   "name": "vscode-extended-actions",
   "displayName": "Extended Actions",
-  "description": "Additional actions for VSCode including save all files without formatting or save participants",
-  "version": "0.1.0",
+  "description": "Additional useful actions for VS Code",
+  "version": "0.0.1",
   "publisher": "statiolake",
   "author": "statiolake",
   "license": "MIT",
+  "engines": {
+    "vscode": "^1.104.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "save",
+    "format",
+    "commands"
+  ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/statiolake/vscode-extended-actions.git"
+    "url": "https://github.com/statiolake/vscode-extended-actions"
   },
   "bugs": {
     "url": "https://github.com/statiolake/vscode-extended-actions/issues"
   },
   "homepage": "https://github.com/statiolake/vscode-extended-actions#readme",
-  "keywords": [
-    "save",
-    "formatting",
-    "batch",
-    "files",
-    "productivity"
-  ],
-  "engines": {
-    "vscode": "^1.100.0"
-  },
-  "categories": [
-    "Other"
-  ],
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "vscode-extended-actions.saveAllWithoutFormatting",
-        "title": "Save All Without Save Participants"
+        "command": "vscode-extended-actions.saveAllWithoutFormat",
+        "title": "File: Save All Without Format"
+      },
+      {
+        "command": "vscode-extended-actions.createAndOpenFolder",
+        "title": "File: Create and Open New Folder"
       }
     ]
   },
@@ -41,19 +43,16 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
-    "test": "vscode-test"
+    "package": "vsce package",
+    "publish": "vsce publish"
   },
   "devDependencies": {
-    "@types/vscode": "^1.100.0",
-    "@types/mocha": "^10.0.10",
-    "@types/node": "20.x",
-    "@typescript-eslint/eslint-plugin": "^8.31.1",
-    "@typescript-eslint/parser": "^8.31.1",
-    "eslint": "^9.25.1",
-    "typescript": "^5.8.3",
-    "@vscode/test-cli": "^0.0.10",
-    "@vscode/test-electron": "^2.5.2"
+    "@types/vscode": "^1.104.0",
+    "@types/node": "22.x",
+    "@typescript-eslint/eslint-plugin": "^8.45.0",
+    "@typescript-eslint/parser": "^8.45.0",
+    "eslint": "^9.36.0",
+    "typescript": "^5.9.3"
   }
 }

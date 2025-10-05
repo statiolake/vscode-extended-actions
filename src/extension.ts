@@ -1,75 +1,122 @@
 import * as vscode from "vscode";
+import * as path from "path";
+import * as fs from "fs";
+import * as os from "os";
 
 export function activate(context: vscode.ExtensionContext) {
-  const disposable = vscode.commands.registerCommand(
-    "vscode-extended-actions.saveAllWithoutFormatting",
+  const saveAllWithoutFormat = vscode.commands.registerCommand(
+    "vscode-extended-actions.saveAllWithoutFormat",
     async () => {
-      try {
-        // Only process documents that have unsaved changes to avoid unnecessary operations
-        const dirtyDocuments = vscode.workspace.textDocuments.filter(
-          (doc) => doc.isDirty
+      const activeEditor = vscode.window.activeTextEditor;
+      const dirtyDocs = vscode.workspace.textDocuments.filter(
+        (doc) => doc.isDirty
+      );
+
+      for (const doc of dirtyDocs) {
+        await vscode.window.showTextDocument(doc, { preserveFocus: false });
+        await vscode.commands.executeCommand(
+          "workbench.action.files.saveWithoutFormatting"
         );
+      }
 
-        console.log(`Found ${dirtyDocuments.length} dirty documents to save`);
-
-        if (dirtyDocuments.length === 0) {
-          console.log("No modified files to save");
-          return;
-        }
-
-        // Preserve current editor state to restore user context after batch operation
-        const originalActiveEditor = vscode.window.activeTextEditor;
-        let savedCount = 0;
-        let skippedCount = 0;
-
-        for (const document of dirtyDocuments) {
-          try {
-            console.log(`Attempting to save: ${document.fileName}`);
-
-            // Activate each document to ensure save command targets the correct file
-            await vscode.window.showTextDocument(document, {
-              preview: true,
-              preserveFocus: true,
-            });
-
-            // Execute built-in command to bypass formatting and save participants
-            await vscode.commands.executeCommand(
-              "workbench.action.files.saveWithoutFormatting"
-            );
-
-            savedCount++;
-            console.log(`Successfully saved: ${document.fileName}`);
-          } catch (error) {
-            skippedCount++;
-            console.log(`Skipped ${document.fileName}: ${error}`);
-          }
-        }
-
-        // Restore original editor to maintain user workflow continuity
-        if (originalActiveEditor) {
-          try {
-            await vscode.window.showTextDocument(
-              originalActiveEditor.document,
-              {
-                preview: false,
-                preserveFocus: false,
-              }
-            );
-          } catch (error) {
-            console.log(`Failed to restore original active editor: ${error}`);
-          }
-        }
-
-        console.log(
-          `Save operation completed. Saved: ${savedCount}, Skipped: ${skippedCount}`
-        );
-      } catch (error) {
-        console.error(`Error in saveAllWithoutFormatting: ${error}`);
+      if (activeEditor) {
+        await vscode.window.showTextDocument(activeEditor.document);
       }
     }
   );
 
-  context.subscriptions.push(disposable);
+  const createAndOpenFolder = vscode.commands.registerCommand(
+    "vscode-extended-actions.createAndOpenFolder",
+    async () => {
+      const config = vscode.workspace.getConfiguration("git");
+      let defaultCloneDirectory =
+        config.get<string>("defaultCloneDirectory") || os.homedir();
+      defaultCloneDirectory = defaultCloneDirectory.replace(/^~/, os.homedir());
+
+      const folderPath = await vscode.window.showInputBox({
+        prompt: "Enter the path for the new folder",
+        value: defaultCloneDirectory,
+        valueSelection: [
+          defaultCloneDirectory.length,
+          defaultCloneDirectory.length,
+        ],
+        validateInput: (value) => {
+          if (!value) {
+            return "Path cannot be empty";
+          }
+          const expandedPath = value.replace(/^~/, os.homedir());
+          if (fs.existsSync(expandedPath)) {
+            return "Folder already exists";
+          }
+          return null;
+        },
+      });
+
+      if (!folderPath) {
+        return;
+      }
+
+      const expandedFolderPath = folderPath.replace(/^~/, os.homedir());
+
+      try {
+        fs.mkdirSync(expandedFolderPath, { recursive: true });
+      } catch (error) {
+        vscode.window.showErrorMessage(
+          `Failed to create folder: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+        return;
+      }
+
+      const OPEN = "Open";
+      const OPEN_NEW_WINDOW = "Open in New Window";
+      const ADD_TO_WORKSPACE = "Add to Workspace";
+
+      let message = "Would you like to open the created folder?";
+      const choices = [OPEN, OPEN_NEW_WINDOW];
+
+      if (vscode.workspace.workspaceFolders) {
+        message =
+          "Would you like to open the created folder, or add it to the current workspace?";
+        choices.push(ADD_TO_WORKSPACE);
+      }
+
+      const result = await vscode.window.showInformationMessage(
+        message,
+        { modal: true },
+        ...choices
+      );
+
+      if (!result) {
+        return;
+      }
+
+      const uri = vscode.Uri.file(expandedFolderPath);
+
+      switch (result) {
+        case OPEN:
+          vscode.commands.executeCommand("vscode.openFolder", uri, {
+            forceReuseWindow: true,
+          });
+          break;
+        case OPEN_NEW_WINDOW:
+          vscode.commands.executeCommand("vscode.openFolder", uri, {
+            forceNewWindow: true,
+          });
+          break;
+        case ADD_TO_WORKSPACE:
+          vscode.workspace.updateWorkspaceFolders(
+            vscode.workspace.workspaceFolders!.length,
+            0,
+            { uri }
+          );
+          break;
+      }
+    }
+  );
+
+  context.subscriptions.push(saveAllWithoutFormat, createAndOpenFolder);
 }
 
 export function deactivate() {}
