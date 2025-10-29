@@ -1,11 +1,10 @@
-import * as vscode from "vscode";
-import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
+import * as vscode from "vscode";
 
 export function activate(context: vscode.ExtensionContext) {
   const saveAllWithoutFormat = vscode.commands.registerCommand(
-    "vscode-extended-actions.saveAllWithoutFormat",
+    "vscode-extended-actions.saveAllWithoutFormatting",
     async () => {
       const activeEditor = vscode.window.activeTextEditor;
       const dirtyDocs = vscode.workspace.textDocuments.filter(

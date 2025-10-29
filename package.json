@@ -30,7 +30,7 @@
   "contributes": {
     "commands": [
       {
-        "command": "vscode-extended-actions.saveAllWithoutFormat",
+        "command": "vscode-extended-actions.saveAllWithoutFormatting",
         "title": "File: Save All Without Format"
       },
       {
