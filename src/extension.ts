@@ -115,7 +115,38 @@ export function activate(context: vscode.ExtensionContext) {
     }
   );
 
-  context.subscriptions.push(saveAllWithoutFormat, createAndOpenFolder);
+  const closeGitDiffAndOpenOriginal = vscode.commands.registerCommand(
+    "vscode-extended-actions.closeGitDiffAndOpenOriginal",
+    async () => {
+      const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
+      if (!activeTab) {
+        return;
+      }
+
+      // Check if the active tab is a diff view
+      const input = activeTab.input;
+      if (!(input instanceof vscode.TabInputTextDiff)) {
+        return;
+      }
+
+      // Get the original (left side) file URI
+      const originalUri = input.original;
+
+      // Close the diff view tab
+      await vscode.window.tabGroups.close(activeTab);
+
+      // Open the original file
+      await vscode.window.showTextDocument(originalUri, {
+        preserveFocus: false,
+      });
+    }
+  );
+
+  context.subscriptions.push(
+    saveAllWithoutFormat,
+    createAndOpenFolder,
+    closeGitDiffAndOpenOriginal
+  );
 }
 
 export function deactivate() {}
