@@ -44,6 +44,10 @@
       {
         "command": "vscode-extended-actions.exitCurrentSurrounding",
         "title": "Navigation: Exit Current Surrounding"
+      },
+      {
+        "command": "vscode-extended-actions.enterPreviousSurrounding",
+        "title": "Navigation: Enter Previous Surrounding"
       }
     ]
   },
