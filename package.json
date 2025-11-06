@@ -40,6 +40,10 @@
       {
         "command": "vscode-extended-actions.closeGitDiffAndOpenOriginal",
         "title": "File: Close Git Diff and Open Original"
+      },
+      {
+        "command": "vscode-extended-actions.exitCurrentSurrounding",
+        "title": "Navigation: Exit Current Surrounding"
       }
     ]
   },
@@ -48,16 +52,22 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src",
+    "pretest": "npm run compile && npm run lint",
+    "test": "vscode-test",
     "package": "vsce package",
     "publish": "vsce publish"
   },
   "devDependencies": {
+    "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
     "@types/vscode": "^1.104.0",
     "@typescript-eslint/eslint-plugin": "^8.45.0",
     "@typescript-eslint/parser": "^8.45.0",
+    "@vscode/test-cli": "^0.0.11",
+    "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.6.2",
     "eslint": "^9.36.0",
+    "mocha": "^11.7.4",
     "typescript": "^5.9.3"
   }
 }
