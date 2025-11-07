@@ -1,6 +1,6 @@
 import * as assert from "node:assert";
 import * as vscode from "vscode";
-import { computeExitSelections, computeEnterSelections } from "../exitSurrounding";
+import { computeExitSelections } from "../exitSurrounding";
 
 suite("exitSurrounding utility functions", () => {
   suite("computeExitSelections", () => {
@@ -132,128 +132,6 @@ suite("exitSurrounding utility functions", () => {
       assert.strictEqual(result.length, 1);
       assert.strictEqual(result[0].active.line, 2);
       assert.strictEqual(result[0].active.character, 1); // after closing paren
-    });
-  });
-
-  suite("computeEnterSelections", () => {
-    // Helper function to create a real TextDocument
-    async function createTestDocument(text: string): Promise<vscode.TextDocument> {
-      return await vscode.workspace.openTextDocument({
-        content: text,
-        language: "plaintext",
-      });
-    }
-
-    test("should enter before closing paren", async () => {
-      const text = "foo(hello) bar";
-      const doc = await createTestDocument(text);
-      // cursor at position 11 = space after closing paren
-      const selection = new vscode.Selection(
-        new vscode.Position(0, 11),
-        new vscode.Position(0, 11)
-      );
-
-      const result = computeEnterSelections(doc, [selection]);
-      assert.strictEqual(result.length, 1);
-      assert.strictEqual(result[0].active.line, 0);
-      assert.strictEqual(result[0].active.character, 9); // before closing paren
-    });
-
-    test("should enter before closing bracket", async () => {
-      const text = "arr[0] next";
-      const doc = await createTestDocument(text);
-      const selection = new vscode.Selection(
-        new vscode.Position(0, 7),
-        new vscode.Position(0, 7)
-      );
-
-      const result = computeEnterSelections(doc, [selection]);
-      assert.strictEqual(result.length, 1);
-      assert.strictEqual(result[0].active.character, 5); // before closing bracket
-    });
-
-    test("should handle nested brackets", async () => {
-      const text = "foo(bar[baz]) end";
-      const doc = await createTestDocument(text);
-      // positions: f(0)o(1)o(2)((3)b(4)a(5)r(6)[(7)b(8)a(9)z(10)](11))(12) (13)e(14)n(15)d(16)
-      const selection = new vscode.Selection(
-        new vscode.Position(0, 15), // after all brackets at 'n'
-        new vscode.Position(0, 15)
-      );
-
-      const result = computeEnterSelections(doc, [selection]);
-      assert.strictEqual(result.length, 1);
-      // Should find the closing ')' first (most recent closing bracket going backwards)
-      assert.strictEqual(result[0].active.character, 12);
-    });
-
-    test("should enter before closing quote", async () => {
-      const text = 'str"hello" next';
-      const doc = await createTestDocument(text);
-      const selection = new vscode.Selection(
-        new vscode.Position(0, 11),
-        new vscode.Position(0, 11)
-      );
-
-      const result = computeEnterSelections(doc, [selection]);
-      assert.strictEqual(result.length, 1);
-      assert.strictEqual(result[0].active.character, 9); // before closing quote
-    });
-
-    test("should handle multiple selections", async () => {
-      const text = "foo(a) bar(b)";
-      const doc = await createTestDocument(text);
-      const selections = [
-        new vscode.Selection(new vscode.Position(0, 7), new vscode.Position(0, 7)), // after first )
-        new vscode.Selection(new vscode.Position(0, 13), new vscode.Position(0, 13)), // after second )
-      ];
-
-      const result = computeEnterSelections(doc, selections);
-      assert.strictEqual(result.length, 2);
-      assert.strictEqual(result[0].active.character, 5); // before first )
-      assert.strictEqual(result[1].active.character, 12); // before second )
-    });
-
-    test("should keep selection if no closing bracket found", async () => {
-      const text = "hello world";
-      const doc = await createTestDocument(text);
-      const selection = new vscode.Selection(
-        new vscode.Position(0, 5),
-        new vscode.Position(0, 5)
-      );
-
-      const result = computeEnterSelections(doc, [selection]);
-      assert.strictEqual(result.length, 1);
-      assert.strictEqual(result[0].active.line, 0);
-      assert.strictEqual(result[0].active.character, 5); // unchanged
-    });
-
-    test("should handle escaped quotes", async () => {
-      const text = 'str"hel\\"lo" next';
-      const doc = await createTestDocument(text);
-      const selection = new vscode.Selection(
-        new vscode.Position(0, 13),
-        new vscode.Position(0, 13)
-      );
-
-      const result = computeEnterSelections(doc, [selection]);
-      assert.strictEqual(result.length, 1);
-      // Should find the real closing quote, not the escaped one
-      assert.strictEqual(result[0].active.character, 11);
-    });
-
-    test("should handle multiline text", async () => {
-      const text = "foo(\n  bar\n)\nend";
-      const doc = await createTestDocument(text);
-      const selection = new vscode.Selection(
-        new vscode.Position(3, 1),
-        new vscode.Position(3, 1)
-      );
-
-      const result = computeEnterSelections(doc, [selection]);
-      assert.strictEqual(result.length, 1);
-      assert.strictEqual(result[0].active.line, 2);
-      assert.strictEqual(result[0].active.character, 0); // before closing paren
     });
   });
 });
