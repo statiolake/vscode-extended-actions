@@ -1,7 +1,6 @@
 import * as fs from "fs";
 import * as os from "os";
 import * as vscode from "vscode";
-import { computeExitSelections } from "./exitSurrounding";
 
 export function activate(context: vscode.ExtensionContext) {
   const saveAllWithoutFormat = vscode.commands.registerCommand(
@@ -143,30 +142,10 @@ export function activate(context: vscode.ExtensionContext) {
     }
   );
 
-  const exitCurrentSurrounding = vscode.commands.registerCommand(
-    "vscode-extended-actions.exitCurrentSurrounding",
-    async () => {
-      const editor = vscode.window.activeTextEditor;
-      if (!editor) {
-        return;
-      }
-
-      // Compute new selections using the pure function
-      const newSelections = computeExitSelections(
-        editor.document,
-        editor.selections
-      );
-
-      // Apply the new selections
-      editor.selections = newSelections;
-    }
-  );
-
   context.subscriptions.push(
     saveAllWithoutFormat,
     createAndOpenFolder,
-    closeGitDiffAndOpenOriginal,
-    exitCurrentSurrounding
+    closeGitDiffAndOpenOriginal
   );
 }
 
