@@ -2,7 +2,7 @@
   "name": "vscode-extended-actions",
   "displayName": "Extended Actions",
   "description": "Additional useful actions for VS Code",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "statiolake",
   "author": "statiolake",
   "license": "MIT",
