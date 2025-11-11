@@ -2,6 +2,29 @@ import * as fs from "fs";
 import * as os from "os";
 import * as vscode from "vscode";
 
+/**
+ * Converts a git URI to a writable workspace file URI
+ * Handles git:// URIs by extracting the actual file path from the query parameters
+ */
+function toWorkspaceFileUri(uri: vscode.Uri): vscode.Uri {
+  // If it's already a file:// URI, just return it
+  if (uri.scheme === "file") {
+    return uri;
+  }
+
+  // If it's a git:// URI, extract the path from query parameters
+  if (uri.scheme === "git") {
+    const query = JSON.parse(uri.query);
+    const pathStr = query.path;
+    if (pathStr) {
+      return vscode.Uri.file(pathStr);
+    }
+  }
+
+  // Fallback: return as-is
+  return uri;
+}
+
 export function activate(context: vscode.ExtensionContext) {
   const saveAllWithoutFormat = vscode.commands.registerCommand(
     "vscode-extended-actions.saveAllWithoutFormatting",
@@ -129,14 +152,17 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      // Get the original (left side) file URI
-      const originalUri = input.original;
+      // Get the workspace file (right side) URI - this is the editable file
+      let workspaceUri = input.modified;
+
+      // Convert git URI to workspace file URI if needed
+      workspaceUri = toWorkspaceFileUri(workspaceUri);
 
       // Close the diff view tab
       await vscode.window.tabGroups.close(activeTab);
 
-      // Open the original file
-      await vscode.window.showTextDocument(originalUri, {
+      // Open the workspace file
+      await vscode.window.showTextDocument(workspaceUri, {
         preserveFocus: false,
       });
     }

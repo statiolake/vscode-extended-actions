@@ -1,5 +1,4 @@
 import * as assert from "node:assert";
-import * as vscode from "vscode";
 
 suite("Extension Test Suite", () => {
   test("Sample test", () => {
