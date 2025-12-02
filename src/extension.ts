@@ -246,33 +246,12 @@ export function activate(context: vscode.ExtensionContext) {
       const direction = nextCount < previousCount ? "next" : "previous";
       const count = Math.min(nextCount, previousCount);
       await Promise.all(
-        Array(count)
-          .fill(0)
-          .map((_) =>
-            vscode.commands.executeCommand(
-              `workbench.action.${direction}EditorInGroup`
-            )
+        [...Array(count)].map((_) =>
+          vscode.commands.executeCommand(
+            `workbench.action.${direction}EditorInGroup`
           )
+        )
       );
-      // for (let i = 0; i < count; i++) {
-      //   vscode.commands.executeCommand(
-      //     `workbench.action.${direction}EditorInGroup`
-      //   );
-      // }
-
-      // // to avoid infinite loop, keep a first tab name
-      // let firstTabLabel = undefined;
-      // const getActiveTabLabel = () => tabGroups.activeTabGroup.activeTab?.label;
-      // while (![restoreTabLabel, firstTabLabel].includes(getActiveTabLabel())) {
-      //   if (firstTabLabel === undefined) {
-      //     firstTabLabel = getActiveTabLabel();
-      //   }
-
-      //   // Cycle through tabs until we find the original active tab
-      //   await vscode.commands.executeCommand(
-      //     `workbench.action.${direction}EditorInGroup`
-      //   );
-      // }
     }
   );
 
