@@ -168,10 +168,119 @@ export function activate(context: vscode.ExtensionContext) {
     }
   );
 
+  const joinTwoGroupsInBackground = vscode.commands.registerCommand(
+    "vscode-extended-actions.joinTwoGroupsInBackground",
+    async () => {
+      const tabGroups = vscode.window.tabGroups;
+      const allGroups = tabGroups.all;
+
+      // Check if there's only one group
+      if (allGroups.length <= 1) {
+        vscode.window.showInformationMessage(
+          "No other editor group to merge with"
+        );
+        return;
+      }
+
+      // Save entire groups (except the one to be merged from) before merge to
+      // later determine original active tab
+      const groupTabsBeforeMerge = tabGroups.all
+        .filter((group) => !group.isActive)
+        .map((group) =>
+          group.tabs.map((tab) => ({
+            label: tab.label,
+            isActive: tab.isActive,
+          }))
+        );
+
+      // Use the built-in join two groups command
+      // This handles all the complexity of moving tabs correctly
+      await vscode.commands.executeCommand("workbench.action.joinTwoGroups");
+
+      // Determine target tab group (the one that received the tabs)
+      // We can find that because only that tab group will have a different
+      // size or different active tab than before
+      const targetGroupIndex = allGroups.findIndex((group) => {
+        return groupTabsBeforeMerge.every(
+          (groupTabs) =>
+            groupTabs.length !== group.tabs.length ||
+            groupTabs.some(
+              ({ label, isActive }, index) =>
+                label !== group.tabs[index].label ||
+                isActive !== group.tabs[index].isActive
+            )
+        );
+      });
+      if (targetGroupIndex === -1) {
+        // In some cases (the original group is completely a subset of the
+        // target group) it makes no difference to the target group before and
+        // after merge. In this case we doesn't need to do anything.
+        console.log("unchanged before and after merge, nothing to restore");
+        return;
+      }
+
+      const restoreTabLabel = groupTabsBeforeMerge[targetGroupIndex].find(
+        ({ isActive }) => isActive
+      )?.label;
+      console.log("restoreTabLabel:", restoreTabLabel);
+
+      // Restore focus to the original active tab in target group (in background)
+      // Use tab label to find and restore the active tab
+      if (!restoreTabLabel) {
+        console.log("no original target active tab, nothing to restore");
+        return;
+      }
+
+      const activeGroupTabs = tabGroups.activeTabGroup.tabs;
+      const currentTabIndex = activeGroupTabs.findIndex((tab) => tab.isActive);
+      const targetTabIndex = activeGroupTabs.findIndex(
+        (tab) => tab.label === restoreTabLabel
+      );
+
+      const nextCount =
+        (targetTabIndex + activeGroupTabs.length - currentTabIndex) %
+        activeGroupTabs.length;
+      const previousCount =
+        (currentTabIndex + activeGroupTabs.length - targetTabIndex) %
+        activeGroupTabs.length;
+      const direction = nextCount < previousCount ? "next" : "previous";
+      const count = Math.min(nextCount, previousCount);
+      await Promise.all(
+        Array(count)
+          .fill(0)
+          .map((_) =>
+            vscode.commands.executeCommand(
+              `workbench.action.${direction}EditorInGroup`
+            )
+          )
+      );
+      // for (let i = 0; i < count; i++) {
+      //   vscode.commands.executeCommand(
+      //     `workbench.action.${direction}EditorInGroup`
+      //   );
+      // }
+
+      // // to avoid infinite loop, keep a first tab name
+      // let firstTabLabel = undefined;
+      // const getActiveTabLabel = () => tabGroups.activeTabGroup.activeTab?.label;
+      // while (![restoreTabLabel, firstTabLabel].includes(getActiveTabLabel())) {
+      //   if (firstTabLabel === undefined) {
+      //     firstTabLabel = getActiveTabLabel();
+      //   }
+
+      //   // Cycle through tabs until we find the original active tab
+      //   await vscode.commands.executeCommand(
+      //     `workbench.action.${direction}EditorInGroup`
+      //   );
+      // }
+    }
+  );
+
   context.subscriptions.push(
     saveAllWithoutFormat,
     createAndOpenFolder,
-    closeGitDiffAndOpenOriginal
+    closeGitDiffAndOpenOriginal,
+    joinTwoGroupsInBackground
   );
 }
 

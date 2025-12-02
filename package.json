@@ -40,6 +40,10 @@
       {
         "command": "vscode-extended-actions.closeGitDiffAndOpenOriginal",
         "title": "File: Close Git Diff and Open Original"
+      },
+      {
+        "command": "vscode-extended-actions.joinTwoGroupsInBackground",
+        "title": "View: Merge Current Editor Group to Next in Background"
       }
     ]
   },
