@@ -172,10 +172,9 @@ export function activate(context: vscode.ExtensionContext) {
     "vscode-extended-actions.joinTwoGroupsInBackground",
     async () => {
       const tabGroups = vscode.window.tabGroups;
-      const allGroups = tabGroups.all;
 
       // Check if there's only one group
-      if (allGroups.length <= 1) {
+      if (tabGroups.all.length <= 1) {
         vscode.window.showInformationMessage(
           "No other editor group to merge with"
         );
@@ -194,22 +193,22 @@ export function activate(context: vscode.ExtensionContext) {
         );
 
       // Use the built-in join two groups command
-      // This handles all the complexity of moving tabs correctly
       await vscode.commands.executeCommand("workbench.action.joinTwoGroups");
 
       // Determine target tab group (the one that received the tabs)
       // We can find that because only that tab group will have a different
       // size or different active tab than before
-      const targetGroupIndex = allGroups.findIndex((group) => {
-        return groupTabsBeforeMerge.every(
-          (groupTabs) =>
+      const targetGroupIndex = groupTabsBeforeMerge.findIndex((groupTabs) => {
+        return tabGroups.all.every((group) => {
+          return (
             groupTabs.length !== group.tabs.length ||
             groupTabs.some(
               ({ label, isActive }, index) =>
                 label !== group.tabs[index].label ||
                 isActive !== group.tabs[index].isActive
             )
-        );
+          );
+        });
       });
       if (targetGroupIndex === -1) {
         // In some cases (the original group is completely a subset of the
