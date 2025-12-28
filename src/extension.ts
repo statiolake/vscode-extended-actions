@@ -3,6 +3,31 @@ import * as os from "os";
 import * as vscode from "vscode";
 
 /**
+ * Gets a unique identifier string from a tab for comparison purposes.
+ * Uses URI-based identification for file tabs, falls back to label for special tabs.
+ */
+function getTabId(tab: vscode.Tab): string {
+  const input = tab.input;
+  if (input instanceof vscode.TabInputText) {
+    return `text:${input.uri.toString()}`;
+  }
+  if (input instanceof vscode.TabInputTextDiff) {
+    return `diff:${input.original.toString()}:${input.modified.toString()}`;
+  }
+  if (input instanceof vscode.TabInputNotebook) {
+    return `notebook:${input.uri.toString()}`;
+  }
+  if (input instanceof vscode.TabInputNotebookDiff) {
+    return `notebookDiff:${input.original.toString()}:${input.modified.toString()}`;
+  }
+  if (input instanceof vscode.TabInputCustom) {
+    return `custom:${input.uri.toString()}:${input.viewType}`;
+  }
+  // For Webview, Terminal, and unknown types, fall back to label
+  return `label:${tab.label}`;
+}
+
+/**
  * Converts a git URI to a writable workspace file URI
  * Handles git:// URIs by extracting the actual file path from the query parameters
  */
@@ -187,7 +212,7 @@ export function activate(context: vscode.ExtensionContext) {
         .filter((group) => !group.isActive)
         .map((group) =>
           group.tabs.map((tab) => ({
-            label: tab.label,
+            tabId: getTabId(tab),
             isActive: tab.isActive,
           }))
         );
@@ -203,8 +228,8 @@ export function activate(context: vscode.ExtensionContext) {
           return (
             groupTabs.length !== group.tabs.length ||
             groupTabs.some(
-              ({ label, isActive }, index) =>
-                label !== group.tabs[index].label ||
+              ({ tabId, isActive }, index) =>
+                tabId !== getTabId(group.tabs[index]) ||
                 isActive !== group.tabs[index].isActive
             )
           );
@@ -218,22 +243,25 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      const restoreTabLabel = groupTabsBeforeMerge[targetGroupIndex].find(
+      const restoreTabId = groupTabsBeforeMerge[targetGroupIndex].find(
         ({ isActive }) => isActive
-      )?.label;
-      console.log("restoreTabLabel:", restoreTabLabel);
+      )?.tabId;
+      console.log("restoreTabId:", restoreTabId);
 
       // Restore focus to the original active tab in target group (in background)
-      // Use tab label to find and restore the active tab
-      if (!restoreTabLabel) {
+      if (!restoreTabId) {
         console.log("no original target active tab, nothing to restore");
         return;
       }
 
       const activeGroupTabs = tabGroups.activeTabGroup.tabs;
+      console.log(
+        "activeGroupTabs:",
+        activeGroupTabs.map((tab) => getTabId(tab))
+      );
       const currentTabIndex = activeGroupTabs.findIndex((tab) => tab.isActive);
       const targetTabIndex = activeGroupTabs.findIndex(
-        (tab) => tab.label === restoreTabLabel
+        (tab) => getTabId(tab) === restoreTabId
       );
 
       const nextCount =
