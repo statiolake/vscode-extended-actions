@@ -44,6 +44,10 @@
       {
         "command": "vscode-extended-actions.joinTwoGroupsInBackground",
         "title": "View: Merge Current Editor Group to Next in Background"
+      },
+      {
+        "command": "vscode-extended-actions.delay",
+        "title": "Util: Delay"
       }
     ]
   },

@@ -282,11 +282,25 @@ export function activate(context: vscode.ExtensionContext) {
     }
   );
 
+  const delay = vscode.commands.registerCommand(
+    "vscode-extended-actions.delay",
+    async (ms: number) => {
+      if (typeof ms !== "number" || ms < 0) {
+        vscode.window.showErrorMessage(
+          "delay command requires a non-negative number argument (milliseconds)"
+        );
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, ms));
+    }
+  );
+
   context.subscriptions.push(
     saveAllWithoutFormat,
     createAndOpenFolder,
     closeGitDiffAndOpenOriginal,
-    joinTwoGroupsInBackground
+    joinTwoGroupsInBackground,
+    delay
   );
 }
 
