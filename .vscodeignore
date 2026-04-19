@@ -2,14 +2,12 @@
 .vscode-test/**
 .vscode-test.mjs
 .claude/**
-.roo/**
 src/**
 out/test/**
 node_modules/**
 .gitignore
 eslint.config.mjs
 tsconfig.json
-vsc-extension-quickstart.md
 *.vsix
 **/*.map
 **/*.ts
