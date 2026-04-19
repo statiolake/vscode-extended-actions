@@ -163,8 +163,8 @@ export function activate(context: vscode.ExtensionContext) {
     }
   );
 
-  const closeGitDiffAndOpenOriginal = vscode.commands.registerCommand(
-    "vscode-extended-actions.closeGitDiffAndOpenOriginal",
+  const closeDiffAndOpenFile = vscode.commands.registerCommand(
+    "vscode-extended-actions.closeDiffAndOpenFile",
     async () => {
       const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
       if (!activeTab) {
@@ -177,23 +177,57 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      // Get the workspace file (right side) URI - this is the editable file
-      let workspaceUri = input.modified;
+      const originalUri = input.original;
+      const modifiedUri = input.modified;
 
-      // Convert git URI to workspace file URI if needed
-      workspaceUri = toWorkspaceFileUri(workspaceUri);
+      // Git diff if either side is a git:// URI — open the workspace file
+      // side automatically. Otherwise, ask the user which side to open.
+      const isGitDiff =
+        originalUri.scheme === "git" || modifiedUri.scheme === "git";
 
-      // Capture cursor selection and scroll position before closing the diff,
-      // so we can restore them in the reopened workspace file.
+      let targetUri: vscode.Uri;
+      let sourceSideUri: vscode.Uri;
+      if (isGitDiff) {
+        sourceSideUri = modifiedUri;
+        targetUri = toWorkspaceFileUri(modifiedUri);
+      } else {
+        const pick = await vscode.window.showQuickPick(
+          [
+            {
+              label: vscode.workspace.asRelativePath(originalUri),
+              description: "Left",
+              uri: originalUri,
+            },
+            {
+              label: vscode.workspace.asRelativePath(modifiedUri),
+              description: "Right",
+              uri: modifiedUri,
+            },
+          ],
+          { placeHolder: "Which side to open?" }
+        );
+        if (!pick) {
+          return;
+        }
+        sourceSideUri = pick.uri;
+        targetUri = pick.uri;
+      }
+
+      // Preserve cursor and scroll only when the active editor corresponds
+      // to the side we are opening — otherwise line numbers wouldn't match.
       const activeEditor = vscode.window.activeTextEditor;
-      const selection = activeEditor?.selection;
-      const visibleRange = activeEditor?.visibleRanges[0];
+      const shouldPreserve =
+        activeEditor?.document.uri.toString() === sourceSideUri.toString();
+      const selection = shouldPreserve ? activeEditor?.selection : undefined;
+      const visibleRange = shouldPreserve
+        ? activeEditor?.visibleRanges[0]
+        : undefined;
 
       // Close the diff view tab
       await vscode.window.tabGroups.close(activeTab);
 
-      // Open the workspace file
-      const editor = await vscode.window.showTextDocument(workspaceUri, {
+      // Open the target file
+      const editor = await vscode.window.showTextDocument(targetUri, {
         preserveFocus: false,
         selection,
       });
@@ -312,7 +346,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     saveAllWithoutFormat,
     createAndOpenFolder,
-    closeGitDiffAndOpenOriginal,
+    closeDiffAndOpenFile,
     joinTwoGroupsInBackground,
     delay
   );

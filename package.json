@@ -38,8 +38,8 @@
         "title": "File: Create and Open New Folder"
       },
       {
-        "command": "vscode-extended-actions.closeGitDiffAndOpenOriginal",
-        "title": "File: Close Git Diff and Open Original"
+        "command": "vscode-extended-actions.closeDiffAndOpenFile",
+        "title": "File: Close Diff and Open File"
       },
       {
         "command": "vscode-extended-actions.joinTwoGroupsInBackground",
