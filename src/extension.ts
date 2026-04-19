@@ -183,13 +183,27 @@ export function activate(context: vscode.ExtensionContext) {
       // Convert git URI to workspace file URI if needed
       workspaceUri = toWorkspaceFileUri(workspaceUri);
 
+      // Capture cursor selection and scroll position before closing the diff,
+      // so we can restore them in the reopened workspace file.
+      const activeEditor = vscode.window.activeTextEditor;
+      const selection = activeEditor?.selection;
+      const visibleRange = activeEditor?.visibleRanges[0];
+
       // Close the diff view tab
       await vscode.window.tabGroups.close(activeTab);
 
       // Open the workspace file
-      await vscode.window.showTextDocument(workspaceUri, {
+      const editor = await vscode.window.showTextDocument(workspaceUri, {
         preserveFocus: false,
+        selection,
       });
+
+      if (visibleRange) {
+        editor.revealRange(
+          visibleRange,
+          vscode.TextEditorRevealType.AtTop
+        );
+      }
     }
   );
 
