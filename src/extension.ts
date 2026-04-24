@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as os from "os";
+import * as path from "path";
 import * as vscode from "vscode";
 
 /**
@@ -330,6 +331,46 @@ export function activate(context: vscode.ExtensionContext) {
     }
   );
 
+  const openProject = vscode.commands.registerCommand(
+    "vscode-extended-actions.openProject",
+    async () => {
+      const dirs = await collectProjectDirs();
+      const items = await buildProjectPickItems(dirs);
+
+      const pick = await vscode.window.showQuickPick(items, {
+        placeHolder: "Select a project to open in the current window",
+        matchOnDescription: true,
+      });
+      if (!pick) {
+        return;
+      }
+
+      switch (pick.action) {
+        case "new":
+          await vscode.commands.executeCommand(
+            "vscode-extended-actions.createAndOpenFolder"
+          );
+          return;
+        case "folder":
+          await vscode.commands.executeCommand(
+            "vscode.openFolder",
+            vscode.Uri.file(pick.dirPath),
+            { forceReuseWindow: true }
+          );
+          return;
+        case "devcontainer":
+          await vscode.commands.executeCommand(
+            "vscode.openFolder",
+            buildDevcontainerUri(pick.dirPath, pick.configFile),
+            { forceReuseWindow: true }
+          );
+          return;
+        case "none":
+          return;
+      }
+    }
+  );
+
   const delay = vscode.commands.registerCommand(
     "vscode-extended-actions.delay",
     async (ms: number) => {
@@ -348,8 +389,283 @@ export function activate(context: vscode.ExtensionContext) {
     createAndOpenFolder,
     closeDiffAndOpenFile,
     joinTwoGroupsInBackground,
+    openProject,
     delay
   );
 }
 
 export function deactivate() {}
+
+type ProjectPickItem = vscode.QuickPickItem &
+  (
+    | { action: "new" }
+    | { action: "folder"; dirPath: string }
+    | { action: "devcontainer"; dirPath: string; configFile?: string }
+    | { action: "none" }
+  );
+
+async function collectProjectDirs(): Promise<string[]> {
+  const home = os.homedir();
+  const results = new Set<string>();
+
+  await walkForGitRepos(path.join(home, "dev"), 4, results);
+
+  await addDirectChildren(path.join(home, "workspace", "work"), results);
+
+  await addIfDirectory(path.join(home, "dotfiles"), results);
+
+  const junkDir = resolveJunkDirectory();
+  if (junkDir) {
+    await addIfDirectory(junkDir, results);
+  }
+
+  return [...results].sort();
+}
+
+export async function walkForGitRepos(
+  root: string,
+  maxDepth: number,
+  out: Set<string>
+): Promise<void> {
+  async function walk(dir: string, depth: number): Promise<void> {
+    let entries: fs.Dirent[];
+    try {
+      entries = await fs.promises.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    if (entries.some((e) => e.isDirectory() && e.name === ".git")) {
+      out.add(dir);
+      return;
+    }
+    if (depth >= maxDepth) {
+      return;
+    }
+    await Promise.all(
+      entries
+        .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+        .map((e) => walk(path.join(dir, e.name), depth + 1))
+    );
+  }
+  await walk(root, 0);
+}
+
+async function addDirectChildren(
+  root: string,
+  out: Set<string>
+): Promise<void> {
+  try {
+    const entries = await fs.promises.readdir(root, { withFileTypes: true });
+    for (const e of entries) {
+      if (e.isDirectory()) {
+        out.add(path.join(root, e.name));
+      }
+    }
+  } catch {
+    // root may not exist on this machine
+  }
+}
+
+async function addIfDirectory(dir: string, out: Set<string>): Promise<void> {
+  try {
+    const stat = await fs.promises.stat(dir);
+    if (stat.isDirectory()) {
+      out.add(dir);
+    }
+  } catch {
+    // dir may not exist on this machine
+  }
+}
+
+function resolveJunkDirectory(): string | undefined {
+  const config = vscode.workspace.getConfiguration("openjunk");
+  const template = config.get<string>("junkDirectory");
+  const treatAs = config.get<string>("treatJunkDirectoryAs");
+  if (!template) {
+    return undefined;
+  }
+  // Only interpret the format we understand; unknown modes are ignored.
+  if (treatAs && treatAs !== "pathDateFormat") {
+    return undefined;
+  }
+  const expanded = expandDateFormat(template).replace(/^~/, os.homedir());
+  if (expanded.includes("[") || expanded.includes("]")) {
+    return undefined;
+  }
+  return expanded;
+}
+
+// Apply moment/dayjs-style formatting: [literal] is passed through verbatim,
+// date tokens (YYYY, MM, DD, HH, mm, ss, ...) are substituted with now.
+export function expandDateFormat(
+  fmt: string,
+  now: Date = new Date()
+): string {
+  const pad = (n: number, width: number): string =>
+    n.toString().padStart(width, "0");
+  const tokens: [string, string][] = [
+    ["YYYY", pad(now.getFullYear(), 4)],
+    ["YY", pad(now.getFullYear() % 100, 2)],
+    ["MMDD", pad(now.getMonth() + 1, 2) + pad(now.getDate(), 2)],
+    ["MM", pad(now.getMonth() + 1, 2)],
+    ["DD", pad(now.getDate(), 2)],
+    ["HH", pad(now.getHours(), 2)],
+    ["mm", pad(now.getMinutes(), 2)],
+    ["ss", pad(now.getSeconds(), 2)],
+  ];
+
+  let out = "";
+  let i = 0;
+  while (i < fmt.length) {
+    if (fmt[i] === "[") {
+      const end = fmt.indexOf("]", i + 1);
+      if (end === -1) {
+        out += fmt.slice(i);
+        break;
+      }
+      out += fmt.slice(i + 1, end);
+      i = end + 1;
+      continue;
+    }
+    let matched: [string, string] | undefined;
+    for (const entry of tokens) {
+      if (fmt.startsWith(entry[0], i)) {
+        matched = entry;
+        break;
+      }
+    }
+    if (matched) {
+      out += matched[1];
+      i += matched[0].length;
+    } else {
+      out += fmt[i];
+      i += 1;
+    }
+  }
+  return out;
+}
+
+async function buildProjectPickItems(
+  dirs: string[]
+): Promise<ProjectPickItem[]> {
+  const home = os.homedir();
+  const items: ProjectPickItem[] = [
+    {
+      action: "new",
+      label: "$(add) New project...",
+      description: "Create a new folder and open it",
+    },
+    {
+      action: "none",
+      label: "Projects",
+      kind: vscode.QuickPickItemKind.Separator,
+    },
+  ];
+  const perDir = await Promise.all(
+    dirs.map((dir) => buildItemsForDir(dir, home))
+  );
+  for (const bucket of perDir) {
+    items.push(...bucket);
+  }
+  return items;
+}
+
+async function buildItemsForDir(
+  dir: string,
+  home: string
+): Promise<ProjectPickItem[]> {
+  const display = compactHome(dir, home);
+  const base = path.basename(dir);
+  const out: ProjectPickItem[] = [
+    { action: "folder", label: base, description: display, dirPath: dir },
+  ];
+  if (await hasRootDevcontainer(dir)) {
+    out.push({
+      action: "devcontainer",
+      label: `${base} [Dev Container]`,
+      description: display,
+      dirPath: dir,
+    });
+  }
+  for (const name of await listNamedDevcontainers(dir)) {
+    out.push({
+      action: "devcontainer",
+      label: `${base} [Dev Container:${name}]`,
+      description: display,
+      dirPath: dir,
+      configFile: path.join(dir, ".devcontainer", name, "devcontainer.json"),
+    });
+  }
+  return out;
+}
+
+function compactHome(p: string, home: string): string {
+  if (p === home) {
+    return "~";
+  }
+  if (p.startsWith(home + path.sep)) {
+    return "~" + p.slice(home.length);
+  }
+  return p;
+}
+
+export async function hasRootDevcontainer(dir: string): Promise<boolean> {
+  const candidates = [
+    path.join(dir, ".devcontainer", "devcontainer.json"),
+    path.join(dir, ".devcontainer.json"),
+  ];
+  for (const candidate of candidates) {
+    try {
+      await fs.promises.access(candidate, fs.constants.F_OK);
+      return true;
+    } catch {
+      continue;
+    }
+  }
+  return false;
+}
+
+export async function listNamedDevcontainers(dir: string): Promise<string[]> {
+  const devDir = path.join(dir, ".devcontainer");
+  let entries: fs.Dirent[];
+  try {
+    entries = await fs.promises.readdir(devDir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const names: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+    const configPath = path.join(devDir, entry.name, "devcontainer.json");
+    try {
+      await fs.promises.access(configPath, fs.constants.F_OK);
+      names.push(entry.name);
+    } catch {
+      continue;
+    }
+  }
+  names.sort();
+  return names;
+}
+
+export function buildDevcontainerUri(
+  hostPath: string,
+  configFile?: string
+): vscode.Uri {
+  const base = path.basename(hostPath);
+  let hex: string;
+  if (configFile) {
+    const payload = JSON.stringify({
+      hostPath,
+      configFile: { $mid: 1, path: configFile, scheme: "file" },
+    });
+    hex = Buffer.from(payload, "utf8").toString("hex");
+  } else {
+    hex = Buffer.from(hostPath, "utf8").toString("hex");
+  }
+  return vscode.Uri.parse(
+    `vscode-remote://dev-container+${hex}/workspaces/${base}`
+  );
+}

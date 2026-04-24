@@ -48,6 +48,10 @@
       {
         "command": "vscode-extended-actions.delay",
         "title": "Util: Delay"
+      },
+      {
+        "command": "vscode-extended-actions.openProject",
+        "title": "File: Open Project..."
       }
     ]
   },
