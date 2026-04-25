@@ -2,7 +2,7 @@
   "name": "vscode-extended-actions",
   "displayName": "Extended Actions",
   "description": "Additional useful actions for VS Code",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "publisher": "statiolake",
   "author": "statiolake",
   "license": "MIT",
@@ -63,7 +63,9 @@
           "markdownDescription": "Source list for the `File: Open Project...` quick pick. Each entry contributes one or more candidate folders. `~` is expanded to the home directory.",
           "items": {
             "type": "object",
-            "required": ["path"],
+            "required": [
+              "path"
+            ],
             "additionalProperties": false,
             "properties": {
               "path": {
@@ -86,7 +88,10 @@
                 "default": [],
                 "items": {
                   "type": "string",
-                  "enum": ["gitRepo", "gitWorktree"]
+                  "enum": [
+                    "gitRepo",
+                    "gitWorktree"
+                  ]
                 },
                 "markdownEnumDescriptions": [
                   "Match directories that contain a `.git` subdirectory.",
