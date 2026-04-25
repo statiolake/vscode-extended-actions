@@ -53,7 +53,57 @@
         "command": "vscode-extended-actions.openProject",
         "title": "File: Open Project..."
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Extended Actions",
+      "properties": {
+        "vscode-extended-actions.openProject.directories": {
+          "type": "array",
+          "default": [],
+          "markdownDescription": "Source list for the `File: Open Project...` quick pick. Each entry contributes one or more candidate folders. `~` is expanded to the home directory.",
+          "items": {
+            "type": "object",
+            "required": ["path"],
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Path to use. ~ is expanded to the home directory."
+              },
+              "recursive": {
+                "type": "boolean",
+                "default": false,
+                "markdownDescription": "Defines the target directory set. When false, the target is the path itself. When true, the target also includes descendants up to `maxDepth`."
+              },
+              "maxDepth": {
+                "type": "integer",
+                "default": 1,
+                "minimum": 1,
+                "description": "Maximum descent depth when recursive is true."
+              },
+              "filter": {
+                "type": "array",
+                "default": [],
+                "items": {
+                  "type": "string",
+                  "enum": ["gitRepo", "gitWorktree"]
+                },
+                "markdownEnumDescriptions": [
+                  "Match directories that contain a `.git` subdirectory.",
+                  "Match directories that contain a `.git` file (git worktree marker)."
+                ],
+                "markdownDescription": "Restrict matches to directories satisfying at least one of the listed kinds. Empty (default) means every directory matches. The collected result is the topmost matches within the target set, so descendants of a match are not included separately."
+              },
+              "formatDate": {
+                "type": "boolean",
+                "default": false,
+                "markdownDescription": "Apply moment/dayjs-style date formatting to the path before resolving (e.g. `YYYY/MMDD`, `HHmmss`). Use `[literal]` to pass through text verbatim."
+              }
+            }
+          }
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

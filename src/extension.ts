@@ -404,95 +404,134 @@ type ProjectPickItem = vscode.QuickPickItem &
     | { action: "none" }
   );
 
+export type ProjectDirFilter = "gitRepo" | "gitWorktree";
+
+export interface ProjectDirEntry {
+  path: string;
+  recursive?: boolean;
+  maxDepth?: number;
+  filter?: ProjectDirFilter[];
+  formatDate?: boolean;
+}
+
 async function collectProjectDirs(): Promise<string[]> {
-  const home = os.homedir();
+  const config = vscode.workspace.getConfiguration("vscode-extended-actions");
+  const entries =
+    config.get<ProjectDirEntry[]>("openProject.directories") ?? [];
+
   const results = new Set<string>();
-
-  await walkForGitRepos(path.join(home, "dev"), 4, results);
-
-  await addDirectChildren(path.join(home, "workspace", "work"), results);
-
-  await addIfDirectory(path.join(home, "dotfiles"), results);
-
-  const junkDir = resolveJunkDirectory();
-  if (junkDir) {
-    await addIfDirectory(junkDir, results);
+  for (const entry of entries) {
+    await collectFromEntry(entry, results);
   }
-
   return [...results].sort();
 }
 
-export async function walkForGitRepos(
-  root: string,
+export async function collectFromEntry(
+  entry: ProjectDirEntry,
+  out: Set<string>
+): Promise<void> {
+  if (!entry || typeof entry.path !== "string" || entry.path === "") {
+    return;
+  }
+  const formatted = entry.formatDate
+    ? expandDateFormat(entry.path)
+    : entry.path;
+  // formatDate could leave unmatched [...] only if the user didn't escape; in
+  // either case we shouldn't try to use a path that still has unresolved markers.
+  if (entry.formatDate && /[[\]]/.test(formatted)) {
+    return;
+  }
+  const root = expandHome(formatted);
+  const filter = entry.filter ?? [];
+  const maxDepth = entry.recursive ? entry.maxDepth ?? 1 : 0;
+
+  await walkAndCollect(root, 0, maxDepth, filter, out);
+}
+
+export function expandHome(p: string): string {
+  if (p === "~") {
+    return os.homedir();
+  }
+  if (p.startsWith("~/") || p.startsWith("~\\")) {
+    return path.join(os.homedir(), p.slice(2));
+  }
+  return p;
+}
+
+// Collects topmost directories (within the target set defined by depth) that
+// satisfy the filter. Conceptually orthogonal: the target set is determined by
+// recursive/maxDepth, the match condition by filter; the result is the topmost
+// matches in their intersection. Returning early at a match is an optimization
+// — descendants of a match cannot themselves be topmost.
+export async function walkAndCollect(
+  dir: string,
+  depth: number,
   maxDepth: number,
+  filter: ProjectDirFilter[],
   out: Set<string>
 ): Promise<void> {
-  async function walk(dir: string, depth: number): Promise<void> {
-    let entries: fs.Dirent[];
-    try {
-      entries = await fs.promises.readdir(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    if (entries.some((e) => e.isDirectory() && e.name === ".git")) {
-      out.add(dir);
-      return;
-    }
-    if (depth >= maxDepth) {
-      return;
-    }
-    await Promise.all(
-      entries
-        .filter((e) => e.isDirectory() && !e.name.startsWith("."))
-        .map((e) => walk(path.join(dir, e.name), depth + 1))
-    );
-  }
-  await walk(root, 0);
-}
-
-async function addDirectChildren(
-  root: string,
-  out: Set<string>
-): Promise<void> {
+  let stat: fs.Stats;
   try {
-    const entries = await fs.promises.readdir(root, { withFileTypes: true });
-    for (const e of entries) {
-      if (e.isDirectory()) {
-        out.add(path.join(root, e.name));
-      }
-    }
+    stat = await fs.promises.stat(dir);
   } catch {
-    // root may not exist on this machine
+    return;
   }
-}
-
-async function addIfDirectory(dir: string, out: Set<string>): Promise<void> {
+  if (!stat.isDirectory()) {
+    return;
+  }
+  if (filter.length === 0 || (await matchesFilter(dir, filter))) {
+    out.add(dir);
+    return;
+  }
+  if (depth >= maxDepth) {
+    return;
+  }
+  let entries: fs.Dirent[];
   try {
-    const stat = await fs.promises.stat(dir);
-    if (stat.isDirectory()) {
-      out.add(dir);
-    }
+    entries = await fs.promises.readdir(dir, { withFileTypes: true });
   } catch {
-    // dir may not exist on this machine
+    return;
+  }
+  await Promise.all(
+    entries
+      .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+      .map((e) =>
+        walkAndCollect(path.join(dir, e.name), depth + 1, maxDepth, filter, out)
+      )
+  );
+}
+
+export async function matchesFilter(
+  dir: string,
+  filter: ProjectDirFilter[]
+): Promise<boolean> {
+  for (const kind of filter) {
+    if (kind === "gitRepo" && (await isGitRepo(dir))) {
+      return true;
+    }
+    if (kind === "gitWorktree" && (await isGitWorktree(dir))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export async function isGitRepo(dir: string): Promise<boolean> {
+  try {
+    const stat = await fs.promises.stat(path.join(dir, ".git"));
+    return stat.isDirectory();
+  } catch {
+    return false;
   }
 }
 
-function resolveJunkDirectory(): string | undefined {
-  const config = vscode.workspace.getConfiguration("openjunk");
-  const template = config.get<string>("junkDirectory");
-  const treatAs = config.get<string>("treatJunkDirectoryAs");
-  if (!template) {
-    return undefined;
+export async function isGitWorktree(dir: string): Promise<boolean> {
+  try {
+    const stat = await fs.promises.stat(path.join(dir, ".git"));
+    return stat.isFile();
+  } catch {
+    return false;
   }
-  // Only interpret the format we understand; unknown modes are ignored.
-  if (treatAs && treatAs !== "pathDateFormat") {
-    return undefined;
-  }
-  const expanded = expandDateFormat(template).replace(/^~/, os.homedir());
-  if (expanded.includes("[") || expanded.includes("]")) {
-    return undefined;
-  }
-  return expanded;
 }
 
 // Apply moment/dayjs-style formatting: [literal] is passed through verbatim,
