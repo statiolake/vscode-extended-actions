@@ -334,17 +334,10 @@ export function activate(context: vscode.ExtensionContext) {
   const openProject = vscode.commands.registerCommand(
     "vscode-extended-actions.openProject",
     async () => {
-      const dirs = await collectProjectDirs();
-      const items = await buildProjectPickItems(dirs);
-
-      const pick = await vscode.window.showQuickPick(items, {
-        placeHolder: "Select a project to open in the current window",
-        matchOnDescription: true,
-      });
+      const pick = await pickProject();
       if (!pick) {
         return;
       }
-
       switch (pick.action) {
         case "new":
           await vscode.commands.executeCommand(
@@ -414,21 +407,24 @@ export interface ProjectDirEntry {
   formatDate?: boolean;
 }
 
-async function collectProjectDirs(): Promise<string[]> {
+export type DirSink = (dir: string) => void | Promise<void>;
+
+export async function collectProjectDirsStreaming(
+  onDir: DirSink,
+  signal?: AbortSignal
+): Promise<void> {
   const config = vscode.workspace.getConfiguration("vscode-extended-actions");
   const entries =
     config.get<ProjectDirEntry[]>("openProject.directories") ?? [];
-
-  const results = new Set<string>();
-  for (const entry of entries) {
-    await collectFromEntry(entry, results);
-  }
-  return [...results].sort();
+  await Promise.all(
+    entries.map((entry) => collectFromEntry(entry, onDir, signal))
+  );
 }
 
 export async function collectFromEntry(
   entry: ProjectDirEntry,
-  out: Set<string>
+  onDir: DirSink,
+  signal?: AbortSignal
 ): Promise<void> {
   if (!entry || typeof entry.path !== "string" || entry.path === "") {
     return;
@@ -445,7 +441,7 @@ export async function collectFromEntry(
   const filter = entry.filter ?? [];
   const maxDepth = entry.recursive ? entry.maxDepth ?? 1 : 0;
 
-  await walkAndCollect(root, 0, maxDepth, filter, out);
+  await walkAndCollect(root, 0, maxDepth, filter, onDir, signal);
 }
 
 export function expandHome(p: string): string {
@@ -468,8 +464,12 @@ export async function walkAndCollect(
   depth: number,
   maxDepth: number,
   filter: ProjectDirFilter[],
-  out: Set<string>
+  onDir: DirSink,
+  signal?: AbortSignal
 ): Promise<void> {
+  if (signal?.aborted) {
+    return;
+  }
   let stat: fs.Stats;
   try {
     stat = await fs.promises.stat(dir);
@@ -480,7 +480,7 @@ export async function walkAndCollect(
     return;
   }
   if (filter.length === 0 || (await matchesFilter(dir, filter))) {
-    out.add(dir);
+    await onDir(dir);
     return;
   }
   if (depth >= maxDepth) {
@@ -496,7 +496,14 @@ export async function walkAndCollect(
     entries
       .filter((e) => e.isDirectory() && !e.name.startsWith("."))
       .map((e) =>
-        walkAndCollect(path.join(dir, e.name), depth + 1, maxDepth, filter, out)
+        walkAndCollect(
+          path.join(dir, e.name),
+          depth + 1,
+          maxDepth,
+          filter,
+          onDir,
+          signal
+        )
       )
   );
 }
@@ -584,29 +591,104 @@ export function expandDateFormat(
   return out;
 }
 
-async function buildProjectPickItems(
-  dirs: string[]
-): Promise<ProjectPickItem[]> {
+function makeNewProjectItem(): ProjectPickItem {
+  return {
+    action: "new",
+    label: "$(add) New project...",
+    description: "Create a new folder and open it",
+  };
+}
+
+function makeProjectsSeparator(): ProjectPickItem {
+  return {
+    action: "none",
+    label: "Projects",
+    kind: vscode.QuickPickItemKind.Separator,
+  };
+}
+
+// Streams items into a QuickPick as project candidates are discovered, so the
+// picker is interactive immediately and remains so while large directory trees
+// are walked.
+async function pickProject(): Promise<ProjectPickItem | undefined> {
   const home = os.homedir();
-  const items: ProjectPickItem[] = [
-    {
-      action: "new",
-      label: "$(add) New project...",
-      description: "Create a new folder and open it",
-    },
-    {
-      action: "none",
-      label: "Projects",
-      kind: vscode.QuickPickItemKind.Separator,
-    },
-  ];
-  const perDir = await Promise.all(
-    dirs.map((dir) => buildItemsForDir(dir, home))
-  );
-  for (const bucket of perDir) {
-    items.push(...bucket);
-  }
-  return items;
+  const qp = vscode.window.createQuickPick<ProjectPickItem>();
+  qp.placeholder = "Select a project to open in the current window";
+  qp.matchOnDescription = true;
+  qp.busy = true;
+
+  const newItem = makeNewProjectItem();
+  const separator = makeProjectsSeparator();
+  const projectItems: ProjectPickItem[] = [];
+  const seen = new Set<string>();
+  let renderScheduled = false;
+
+  const render = () => {
+    renderScheduled = false;
+    const sorted = [...projectItems].sort((a, b) =>
+      a.label.localeCompare(b.label)
+    );
+    qp.items = [newItem, separator, ...sorted];
+  };
+  // Coalesce rapid pushes into one render per microtask burst — avoids
+  // re-assigning items on every fs.stat completion.
+  const scheduleRender = () => {
+    if (renderScheduled) {
+      return;
+    }
+    renderScheduled = true;
+    queueMicrotask(render);
+  };
+
+  render();
+
+  const pickPromise = new Promise<ProjectPickItem | undefined>((resolve) => {
+    let resolved = false;
+    const finish = (value: ProjectPickItem | undefined) => {
+      if (resolved) {
+        return;
+      }
+      resolved = true;
+      resolve(value);
+    };
+    qp.onDidAccept(() => {
+      finish(qp.activeItems[0]);
+      qp.hide();
+    });
+    qp.onDidHide(() => finish(undefined));
+  });
+
+  qp.show();
+
+  const cancel = new AbortController();
+  qp.onDidHide(() => cancel.abort());
+
+  const collecting = (async () => {
+    try {
+      await collectProjectDirsStreaming(async (dir) => {
+        if (cancel.signal.aborted || seen.has(dir)) {
+          return;
+        }
+        seen.add(dir);
+        const items = await buildItemsForDir(dir, home);
+        if (cancel.signal.aborted) {
+          return;
+        }
+        projectItems.push(...items);
+        scheduleRender();
+      }, cancel.signal);
+    } finally {
+      if (!cancel.signal.aborted) {
+        qp.busy = false;
+      }
+    }
+  })();
+
+  const pick = await pickPromise;
+  cancel.abort();
+  await collecting.catch(() => undefined);
+  qp.dispose();
+  return pick;
 }
 
 async function buildItemsForDir(

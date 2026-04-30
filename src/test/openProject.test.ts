@@ -37,6 +37,10 @@ async function mkdirp(dir: string): Promise<void> {
   await fs.promises.mkdir(dir, { recursive: true });
 }
 
+const sink = (out: Set<string>) => (dir: string) => {
+  out.add(dir);
+};
+
 suite("expandDateFormat", () => {
   const fixed = new Date(2026, 3, 24, 9, 7, 5); // 2026-04-24 09:07:05
 
@@ -248,13 +252,13 @@ suite("collectFromEntry", () => {
 
   test("non-recursive adds the root itself", async () => {
     const out = new Set<string>();
-    await collectFromEntry({ path: root }, out);
+    await collectFromEntry({ path: root }, sink(out));
     assert.deepStrictEqual([...out], [root]);
   });
 
   test("non-recursive skips non-existent directories silently", async () => {
     const out = new Set<string>();
-    await collectFromEntry({ path: path.join(root, "missing") }, out);
+    await collectFromEntry({ path: path.join(root, "missing") }, sink(out));
     assert.strictEqual(out.size, 0);
   });
 
@@ -265,13 +269,13 @@ suite("collectFromEntry", () => {
     await mkdirp(plain);
 
     const matched = new Set<string>();
-    await collectFromEntry({ path: repo, filter: ["gitRepo"] }, matched);
+    await collectFromEntry({ path: repo, filter: ["gitRepo"] }, sink(matched));
     assert.deepStrictEqual([...matched], [repo]);
 
     const unmatched = new Set<string>();
     await collectFromEntry(
       { path: plain, filter: ["gitRepo"] },
-      unmatched
+      sink(unmatched)
     );
     assert.strictEqual(unmatched.size, 0);
   });
@@ -282,7 +286,10 @@ suite("collectFromEntry", () => {
     await touch(path.join(root, "c.txt"));
 
     const out = new Set<string>();
-    await collectFromEntry({ path: root, recursive: true, maxDepth: 4 }, out);
+    await collectFromEntry(
+      { path: root, recursive: true, maxDepth: 4 },
+      sink(out)
+    );
     assert.deepStrictEqual([...out], [root]);
   });
 
@@ -294,7 +301,7 @@ suite("collectFromEntry", () => {
     const out = new Set<string>();
     await collectFromEntry(
       { path: root, recursive: true, maxDepth: 4, filter: ["gitRepo"] },
-      out
+      sink(out)
     );
     assert.deepStrictEqual(
       [...out].sort(),
@@ -309,7 +316,7 @@ suite("collectFromEntry", () => {
     const out = new Set<string>();
     await collectFromEntry(
       { path: root, recursive: true, maxDepth: 4, filter: ["gitRepo"] },
-      out
+      sink(out)
     );
     assert.deepStrictEqual([...out], [path.join(root, "outer")]);
   });
@@ -321,7 +328,7 @@ suite("collectFromEntry", () => {
     const out = new Set<string>();
     await collectFromEntry(
       { path: root, recursive: true, maxDepth: 4, filter: ["gitRepo"] },
-      out
+      sink(out)
     );
     assert.deepStrictEqual([...out], [root]);
   });
@@ -341,7 +348,7 @@ suite("collectFromEntry", () => {
         maxDepth: 2,
         filter: ["gitRepo", "gitWorktree"],
       },
-      out
+      sink(out)
     );
     assert.deepStrictEqual([...out].sort(), [repo, wt]);
   });
@@ -352,14 +359,14 @@ suite("collectFromEntry", () => {
     const shallow = new Set<string>();
     await collectFromEntry(
       { path: root, recursive: true, maxDepth: 2, filter: ["gitRepo"] },
-      shallow
+      sink(shallow)
     );
     assert.strictEqual(shallow.size, 0, "depth 2 cannot reach the depth-3 repo");
 
     const deep = new Set<string>();
     await collectFromEntry(
       { path: root, recursive: true, maxDepth: 3, filter: ["gitRepo"] },
-      deep
+      sink(deep)
     );
     assert.deepStrictEqual([...deep], [path.join(root, "a", "b", "c")]);
   });
@@ -375,15 +382,29 @@ suite("collectFromEntry", () => {
         path: path.join(root, "[literal-segment]", "YYYY"),
         formatDate: true,
       },
-      out
+      sink(out)
     );
     assert.deepStrictEqual([...out], [concreteDir]);
   });
 
   test("ignores entries with empty or missing path", async () => {
     const out = new Set<string>();
-    await collectFromEntry({ path: "" }, out);
-    await collectFromEntry({} as never, out);
+    await collectFromEntry({ path: "" }, sink(out));
+    await collectFromEntry({} as never, sink(out));
+    assert.strictEqual(out.size, 0);
+  });
+
+  test("aborts walk when AbortSignal fires", async () => {
+    await mkdirp(path.join(root, "a", "b", "c", ".git"));
+    const ac = new AbortController();
+    ac.abort();
+
+    const out = new Set<string>();
+    await collectFromEntry(
+      { path: root, recursive: true, maxDepth: 4, filter: ["gitRepo"] },
+      sink(out),
+      ac.signal
+    );
     assert.strictEqual(out.size, 0);
   });
 });
