@@ -103,6 +103,11 @@
                 "type": "boolean",
                 "default": false,
                 "markdownDescription": "Apply moment/dayjs-style date formatting to the path before resolving (e.g. `YYYY/MMDD`, `HHmmss`). Use `[literal]` to pass through text verbatim."
+              },
+              "createIfMissing": {
+                "type": "boolean",
+                "default": false,
+                "markdownDescription": "When `true` and `recursive` is `false`, include the path in the picker even if the directory does not exist. Selecting such an entry will create the directory automatically. Useful with `formatDate: true` (e.g. today's daily workspace that may not exist yet)."
               }
             }
           }

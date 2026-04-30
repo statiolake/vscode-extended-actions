@@ -345,6 +345,9 @@ export function activate(context: vscode.ExtensionContext) {
           );
           return;
         case "folder":
+          if (pick.createIfMissing) {
+            await fs.promises.mkdir(pick.dirPath, { recursive: true });
+          }
           await vscode.commands.executeCommand(
             "vscode.openFolder",
             vscode.Uri.file(pick.dirPath),
@@ -392,7 +395,7 @@ export function deactivate() {}
 type ProjectPickItem = vscode.QuickPickItem &
   (
     | { action: "new" }
-    | { action: "folder"; dirPath: string }
+    | { action: "folder"; dirPath: string; createIfMissing?: boolean }
     | { action: "devcontainer"; dirPath: string; configFile?: string }
     | { action: "none" }
   );
@@ -405,9 +408,11 @@ export interface ProjectDirEntry {
   maxDepth?: number;
   filter?: ProjectDirFilter[];
   formatDate?: boolean;
+  createIfMissing?: boolean;
 }
 
-export type DirSink = (dir: string) => void | Promise<void>;
+export type DirSinkOptions = { createIfMissing?: boolean };
+export type DirSink = (dir: string, opts?: DirSinkOptions) => void | Promise<void>;
 
 export async function collectProjectDirsStreaming(
   onDir: DirSink,
@@ -438,6 +443,12 @@ export async function collectFromEntry(
     return;
   }
   const root = expandHome(formatted);
+
+  if (entry.createIfMissing && !entry.recursive) {
+    await onDir(root, { createIfMissing: true });
+    return;
+  }
+
   const filter = entry.filter ?? [];
   const maxDepth = entry.recursive ? entry.maxDepth ?? 1 : 0;
 
@@ -665,12 +676,12 @@ async function pickProject(): Promise<ProjectPickItem | undefined> {
 
   const collecting = (async () => {
     try {
-      await collectProjectDirsStreaming(async (dir) => {
+      await collectProjectDirsStreaming(async (dir, opts) => {
         if (cancel.signal.aborted || seen.has(dir)) {
           return;
         }
         seen.add(dir);
-        const items = await buildItemsForDir(dir, home);
+        const items = await buildItemsForDir(dir, home, opts);
         if (cancel.signal.aborted) {
           return;
         }
@@ -693,13 +704,18 @@ async function pickProject(): Promise<ProjectPickItem | undefined> {
 
 async function buildItemsForDir(
   dir: string,
-  home: string
+  home: string,
+  opts?: DirSinkOptions
 ): Promise<ProjectPickItem[]> {
   const display = compactHome(dir, home);
   const base = path.basename(dir);
+  const createIfMissing = opts?.createIfMissing;
   const out: ProjectPickItem[] = [
-    { action: "folder", label: base, description: display, dirPath: dir },
+    { action: "folder", label: base, description: display, dirPath: dir, createIfMissing },
   ];
+  if (createIfMissing) {
+    return out;
+  }
   if (await hasRootDevcontainer(dir)) {
     out.push({
       action: "devcontainer",

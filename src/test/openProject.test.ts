@@ -13,6 +13,7 @@ import {
   isGitWorktree,
   listNamedDevcontainers,
   matchesFilter,
+  type DirSinkOptions,
 } from "../extension";
 
 // Workspace-local temp root so we don't depend on OS tmpdir semantics
@@ -37,7 +38,7 @@ async function mkdirp(dir: string): Promise<void> {
   await fs.promises.mkdir(dir, { recursive: true });
 }
 
-const sink = (out: Set<string>) => (dir: string) => {
+const sink = (out: Set<string>) => (dir: string, _opts?: DirSinkOptions) => {
   out.add(dir);
 };
 
@@ -406,6 +407,34 @@ suite("collectFromEntry", () => {
       ac.signal
     );
     assert.strictEqual(out.size, 0);
+  });
+
+  test("createIfMissing includes a non-existent path", async () => {
+    const missing = path.join(root, "not-yet-created");
+    const out = new Set<string>();
+    await collectFromEntry({ path: missing, createIfMissing: true }, sink(out));
+    assert.deepStrictEqual([...out], [missing]);
+  });
+
+  test("createIfMissing passes opts to the sink", async () => {
+    const missing = path.join(root, "not-yet-created");
+    const received: Array<{ dir: string; opts?: DirSinkOptions }> = [];
+    await collectFromEntry({ path: missing, createIfMissing: true }, (dir, opts) => {
+      received.push({ dir, opts });
+    });
+    assert.strictEqual(received.length, 1);
+    assert.strictEqual(received[0].dir, missing);
+    assert.deepStrictEqual(received[0].opts, { createIfMissing: true });
+  });
+
+  test("createIfMissing with recursive still requires directory to exist", async () => {
+    const missing = path.join(root, "not-yet-created");
+    const out = new Set<string>();
+    await collectFromEntry(
+      { path: missing, createIfMissing: true, recursive: true },
+      sink(out)
+    );
+    assert.strictEqual(out.size, 0, "recursive mode still does a stat, so missing dir yields nothing");
   });
 });
 
