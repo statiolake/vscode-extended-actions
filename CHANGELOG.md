@@ -16,3 +16,9 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 ## [Unreleased]
 
 - No unreleased changes
+
+## [0.6.4] - 2026-05-21
+
+### Fixed
+
+- Respect the active Docker context when opening projects in Dev Containers.
