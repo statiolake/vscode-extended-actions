@@ -8,6 +8,7 @@ import {
   collectFromEntry,
   expandDateFormat,
   expandHome,
+  getDockerSettings,
   hasRootDevcontainer,
   isGitRepo,
   isGitWorktree,
@@ -90,7 +91,7 @@ suite("expandDateFormat", () => {
 });
 
 suite("buildDevcontainerUri", () => {
-  test("hex-encodes the host path when no configFile is given", () => {
+  test("hex-encodes the host path when no configFile or Docker settings are given", () => {
     const uri = buildDevcontainerUri("/home/user/project");
     const expectedHex = Buffer.from("/home/user/project", "utf8").toString(
       "hex"
@@ -116,6 +117,20 @@ suite("buildDevcontainerUri", () => {
       configFile: { $mid: 1, path: configFile, scheme: "file" },
     });
     assert.strictEqual(uri.path, "/workspaces/project");
+  });
+
+  test("includes Docker settings in the JSON payload", () => {
+    const hostPath = "/home/user/project";
+    const uri = buildDevcontainerUri(hostPath, undefined, {
+      context: "rancher-desktop",
+    });
+
+    const hex = uri.authority.slice("dev-container+".length);
+    const decoded = Buffer.from(hex, "hex").toString("utf8");
+    assert.deepStrictEqual(JSON.parse(decoded), {
+      hostPath,
+      settings: { context: "rancher-desktop" },
+    });
   });
 });
 
@@ -219,6 +234,56 @@ suite("listNamedDevcontainers", () => {
   test("returns an empty list when .devcontainer is missing", async () => {
     const names = await listNamedDevcontainers(dir);
     assert.deepStrictEqual(names, []);
+  });
+});
+
+suite("getDockerSettings", () => {
+  test("uses DOCKER_HOST and related environment variables first", async () => {
+    const settings = await getDockerSettings(
+      {
+        DOCKER_HOST: "unix:///Users/me/.rd/docker.sock",
+        DOCKER_CERT_PATH: "/certs",
+        DOCKER_TLS_VERIFY: "1",
+        DOCKER_CONTEXT: "ignored",
+      },
+      async () => {
+        throw new Error("should not call docker context show");
+      }
+    );
+    assert.deepStrictEqual(settings, {
+      host: "unix:///Users/me/.rd/docker.sock",
+      certPath: "/certs",
+      tlsVerify: "1",
+    });
+  });
+
+  test("uses DOCKER_CONTEXT when it is not default", async () => {
+    const settings = await getDockerSettings(
+      { DOCKER_CONTEXT: "rancher-desktop" },
+      async () => {
+        throw new Error("should not call docker context show");
+      }
+    );
+    assert.deepStrictEqual(settings, { context: "rancher-desktop" });
+  });
+
+  test("uses docker context show when env does not specify Docker settings", async () => {
+    const settings = await getDockerSettings({}, async () => "from-cli");
+    assert.deepStrictEqual(settings, { context: "from-cli" });
+  });
+
+  test("omits the default Docker context", async () => {
+    assert.strictEqual(
+      await getDockerSettings({}, async () => "default"),
+      undefined
+    );
+  });
+
+  test("omits Docker settings when docker context show is unavailable", async () => {
+    assert.strictEqual(
+      await getDockerSettings({}, async () => undefined),
+      undefined
+    );
   });
 });
 

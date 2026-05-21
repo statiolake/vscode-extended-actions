@@ -1,7 +1,11 @@
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import * as vscode from "vscode";
+
+const execFileAsync = promisify(execFile);
 
 /**
  * Gets a unique identifier string from a tab for comparison purposes.
@@ -357,7 +361,11 @@ export function activate(context: vscode.ExtensionContext) {
         case "devcontainer":
           await vscode.commands.executeCommand(
             "vscode.openFolder",
-            buildDevcontainerUri(pick.dirPath, pick.configFile),
+            buildDevcontainerUri(
+              pick.dirPath,
+              pick.configFile,
+              await getDockerSettings()
+            ),
             { forceReuseWindow: true }
           );
           return;
@@ -787,21 +795,65 @@ export async function listNamedDevcontainers(dir: string): Promise<string[]> {
   return names;
 }
 
+type DockerSettings =
+  | { context: string }
+  | { host: string; certPath?: string; tlsVerify?: string };
+
+type DockerContextReader = (env: NodeJS.ProcessEnv) => Promise<string | undefined>;
+
+export async function getDockerSettings(
+  env: NodeJS.ProcessEnv = process.env,
+  readDockerContext: DockerContextReader = readDockerContextFromCli
+): Promise<DockerSettings | undefined> {
+  if (env.DOCKER_HOST) {
+    return {
+      host: env.DOCKER_HOST,
+      certPath: env.DOCKER_CERT_PATH,
+      tlsVerify: env.DOCKER_TLS_VERIFY,
+    };
+  }
+  if (env.DOCKER_CONTEXT && env.DOCKER_CONTEXT !== "default") {
+    return { context: env.DOCKER_CONTEXT };
+  }
+
+  const cliContext = await readDockerContext(env);
+  if (cliContext && cliContext !== "default") {
+    return { context: cliContext };
+  }
+  return undefined;
+}
+
+async function readDockerContextFromCli(
+  env: NodeJS.ProcessEnv
+): Promise<string | undefined> {
+  try {
+    const { stdout } = await execFileAsync("docker", ["context", "show"], {
+      env: { ...process.env, ...env },
+    });
+    const context = stdout.trim();
+    return context || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function buildDevcontainerUri(
   hostPath: string,
-  configFile?: string
+  configFile?: string,
+  settings?: DockerSettings
 ): vscode.Uri {
   const base = path.basename(hostPath);
-  let hex: string;
-  if (configFile) {
-    const payload = JSON.stringify({
-      hostPath,
-      configFile: { $mid: 1, path: configFile, scheme: "file" },
-    });
-    hex = Buffer.from(payload, "utf8").toString("hex");
-  } else {
-    hex = Buffer.from(hostPath, "utf8").toString("hex");
-  }
+  const payload =
+    configFile || settings
+      ? JSON.stringify({
+          hostPath,
+          settings,
+          configFile: configFile
+            ? { $mid: 1, path: configFile, scheme: "file" }
+            : undefined,
+        })
+      : hostPath;
+  const hex = Buffer.from(payload, "utf8").toString("hex");
   return vscode.Uri.parse(
     `vscode-remote://dev-container+${hex}/workspaces/${base}`
   );
