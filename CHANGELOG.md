@@ -15,6 +15,10 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+- No unreleased changes
+
+## [0.6.5] - 2026-07-29
+
 ### Added
 
 - Add an option to show Dev Container entries in the project picker.
