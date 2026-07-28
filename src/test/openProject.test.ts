@@ -4,6 +4,7 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import * as os from "node:os";
 import {
+  buildItemsForDir,
   buildDevcontainerUri,
   collectFromEntry,
   expandDateFormat,
@@ -234,6 +235,41 @@ suite("listNamedDevcontainers", () => {
   test("returns an empty list when .devcontainer is missing", async () => {
     const names = await listNamedDevcontainers(dir);
     assert.deepStrictEqual(names, []);
+  });
+});
+
+suite("buildItemsForDir", () => {
+  let dir: string;
+
+  setup(async () => {
+    dir = await makeTempDir("items");
+    await touch(path.join(dir, ".devcontainer", "devcontainer.json"), "{}");
+    await touch(
+      path.join(dir, ".devcontainer", "worker", "devcontainer.json"),
+      "{}"
+    );
+  });
+
+  teardown(async () => {
+    await rmrf(dir);
+  });
+
+  test("includes Dev Container entries when enabled", async () => {
+    const items = await buildItemsForDir(dir, os.homedir(), true);
+
+    assert.deepStrictEqual(
+      items.map((item) => item.action),
+      ["folder", "devcontainer", "devcontainer"]
+    );
+  });
+
+  test("only includes the folder entry when Dev Containers are disabled", async () => {
+    const items = await buildItemsForDir(dir, os.homedir(), false);
+
+    assert.deepStrictEqual(
+      items.map((item) => item.action),
+      ["folder"]
+    );
   });
 });
 
@@ -517,6 +553,12 @@ suite("openProject command", () => {
     assert.ok(
       commands.includes("vscode-extended-actions.openProject"),
       "openProject command should be registered"
+    );
+    assert.ok(
+      commands.includes(
+        "vscode-extended-actions.openSelectedProjectInNewWindow"
+      ),
+      "new-window acceptance command should be registered"
     );
   });
 });

@@ -54,9 +54,22 @@
         "title": "File: Open Project..."
       }
     ],
+    "keybindings": [
+      {
+        "command": "vscode-extended-actions.openSelectedProjectInNewWindow",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "vscode-extended-actions.openProjectPickerVisible"
+      }
+    ],
     "configuration": {
       "title": "Extended Actions",
       "properties": {
+        "vscode-extended-actions.openProject.showDevContainers": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Show additional Dev Container entries for projects that contain a `devcontainer.json` in the `File: Open Project...` quick pick."
+        },
         "vscode-extended-actions.openProject.directories": {
           "type": "array",
           "default": [],
@@ -123,7 +136,9 @@
     "pretest": "npm run compile && npm run lint",
     "test": "vscode-test",
     "package": "vsce package",
-    "publish": "vsce publish"
+    "publish": "npm run publish:vsce && npm run publish:ovsx",
+    "publish:vsce": "vsce publish",
+    "publish:ovsx": "ovsx publish"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
@@ -136,6 +151,7 @@
     "@vscode/vsce": "^3.6.2",
     "eslint": "^9.36.0",
     "mocha": "^11.7.4",
+    "ovsx": "^1.0.2",
     "typescript": "^5.9.3"
   }
 }

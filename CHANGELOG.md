@@ -15,7 +15,10 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
-- No unreleased changes
+### Added
+
+- Add an option to show Dev Container entries in the project picker.
+- Open a selected project in a new window with Cmd+Enter on macOS or Ctrl+Enter on Windows and Linux.
 
 ## [0.6.4] - 2026-05-21
 

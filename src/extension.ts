@@ -342,37 +342,47 @@ export function activate(context: vscode.ExtensionContext) {
       if (!pick) {
         return;
       }
-      switch (pick.action) {
+      const { item, openLocation } = pick;
+      const openFolderOptions =
+        openLocation === "newWindow"
+          ? { forceNewWindow: true }
+          : { forceReuseWindow: true };
+      switch (item.action) {
         case "new":
           await vscode.commands.executeCommand(
             "vscode-extended-actions.createAndOpenFolder"
           );
           return;
         case "folder":
-          if (pick.createIfMissing) {
-            await fs.promises.mkdir(pick.dirPath, { recursive: true });
+          if (item.createIfMissing) {
+            await fs.promises.mkdir(item.dirPath, { recursive: true });
           }
           await vscode.commands.executeCommand(
             "vscode.openFolder",
-            vscode.Uri.file(pick.dirPath),
-            { forceReuseWindow: true }
+            vscode.Uri.file(item.dirPath),
+            openFolderOptions
           );
           return;
         case "devcontainer":
           await vscode.commands.executeCommand(
             "vscode.openFolder",
             buildDevcontainerUri(
-              pick.dirPath,
-              pick.configFile,
+              item.dirPath,
+              item.configFile,
               await getDockerSettings()
             ),
-            { forceReuseWindow: true }
+            openFolderOptions
           );
           return;
         case "none":
           return;
       }
     }
+  );
+
+  const openSelectedProjectInNewWindow = vscode.commands.registerCommand(
+    "vscode-extended-actions.openSelectedProjectInNewWindow",
+    () => activeProjectPicker?.accept("newWindow")
   );
 
   const delay = vscode.commands.registerCommand(
@@ -394,6 +404,7 @@ export function activate(context: vscode.ExtensionContext) {
     closeDiffAndOpenFile,
     joinTwoGroupsInBackground,
     openProject,
+    openSelectedProjectInNewWindow,
     delay
   );
 }
@@ -407,6 +418,19 @@ type ProjectPickItem = vscode.QuickPickItem &
     | { action: "devcontainer"; dirPath: string; configFile?: string }
     | { action: "none" }
   );
+
+type ProjectOpenLocation = "currentWindow" | "newWindow";
+
+interface ProjectPickResult {
+  item: ProjectPickItem;
+  openLocation: ProjectOpenLocation;
+}
+
+interface ActiveProjectPicker {
+  accept(openLocation: ProjectOpenLocation): void;
+}
+
+let activeProjectPicker: ActiveProjectPicker | undefined;
 
 export type ProjectDirFilter = "gitRepo" | "gitWorktree";
 
@@ -629,10 +653,17 @@ function makeProjectsSeparator(): ProjectPickItem {
 // Streams items into a QuickPick as project candidates are discovered, so the
 // picker is interactive immediately and remains so while large directory trees
 // are walked.
-async function pickProject(): Promise<ProjectPickItem | undefined> {
+async function pickProject(): Promise<ProjectPickResult | undefined> {
   const home = os.homedir();
+  const config = vscode.workspace.getConfiguration("vscode-extended-actions");
+  const showDevContainers = config.get<boolean>(
+    "openProject.showDevContainers",
+    false
+  );
   const qp = vscode.window.createQuickPick<ProjectPickItem>();
-  qp.placeholder = "Select a project to open in the current window";
+  const newWindowKey = process.platform === "darwin" ? "Cmd+Enter" : "Ctrl+Enter";
+  qp.placeholder =
+    `Select a project (Enter: current window, ${newWindowKey}: new window)`;
   qp.matchOnDescription = true;
   qp.busy = true;
 
@@ -661,22 +692,41 @@ async function pickProject(): Promise<ProjectPickItem | undefined> {
 
   render();
 
-  const pickPromise = new Promise<ProjectPickItem | undefined>((resolve) => {
-    let resolved = false;
-    const finish = (value: ProjectPickItem | undefined) => {
-      if (resolved) {
+  let resolvePick:
+    | ((value: ProjectPickResult | undefined) => void)
+    | undefined;
+  const pickPromise = new Promise<ProjectPickResult | undefined>((resolve) => {
+    resolvePick = resolve;
+  });
+  let resolved = false;
+  const finish = (value: ProjectPickResult | undefined) => {
+    if (resolved) {
+      return;
+    }
+    resolved = true;
+    resolvePick?.(value);
+  };
+  const picker: ActiveProjectPicker = {
+    accept: (openLocation) => {
+      const item = qp.activeItems[0];
+      if (!item) {
         return;
       }
-      resolved = true;
-      resolve(value);
-    };
-    qp.onDidAccept(() => {
-      finish(qp.activeItems[0]);
+      finish({ item, openLocation });
       qp.hide();
-    });
-    qp.onDidHide(() => finish(undefined));
+    },
+  };
+  activeProjectPicker = picker;
+  qp.onDidAccept(() => {
+    picker.accept("currentWindow");
   });
+  qp.onDidHide(() => finish(undefined));
 
+  await vscode.commands.executeCommand(
+    "setContext",
+    "vscode-extended-actions.openProjectPickerVisible",
+    true
+  );
   qp.show();
 
   const cancel = new AbortController();
@@ -689,7 +739,12 @@ async function pickProject(): Promise<ProjectPickItem | undefined> {
           return;
         }
         seen.add(dir);
-        const items = await buildItemsForDir(dir, home, opts);
+        const items = await buildItemsForDir(
+          dir,
+          home,
+          showDevContainers,
+          opts
+        );
         if (cancel.signal.aborted) {
           return;
         }
@@ -706,13 +761,22 @@ async function pickProject(): Promise<ProjectPickItem | undefined> {
   const pick = await pickPromise;
   cancel.abort();
   await collecting.catch(() => undefined);
+  if (activeProjectPicker === picker) {
+    activeProjectPicker = undefined;
+    await vscode.commands.executeCommand(
+      "setContext",
+      "vscode-extended-actions.openProjectPickerVisible",
+      false
+    );
+  }
   qp.dispose();
   return pick;
 }
 
-async function buildItemsForDir(
+export async function buildItemsForDir(
   dir: string,
   home: string,
+  showDevContainers: boolean,
   opts?: DirSinkOptions
 ): Promise<ProjectPickItem[]> {
   const display = compactHome(dir, home);
@@ -721,7 +785,7 @@ async function buildItemsForDir(
   const out: ProjectPickItem[] = [
     { action: "folder", label: base, description: display, dirPath: dir, createIfMissing },
   ];
-  if (createIfMissing) {
+  if (createIfMissing || !showDevContainers) {
     return out;
   }
   if (await hasRootDevcontainer(dir)) {
