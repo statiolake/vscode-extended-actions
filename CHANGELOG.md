@@ -15,6 +15,10 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+- No unreleased changes
+
+## [0.6.6] - 2026-07-31
+
 ### Changed
 
 - Make `New project...` honor Enter / Cmd+Enter / Ctrl+Enter from the project
