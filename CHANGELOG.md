@@ -15,7 +15,10 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
-- No unreleased changes
+### Changed
+
+- Make `New project...` honor Enter / Cmd+Enter / Ctrl+Enter from the project
+  picker and open the created folder directly without a second dialog.
 
 ## [0.6.5] - 2026-07-29
 

@@ -20,7 +20,11 @@ Creates a new folder and opens it in VS Code.
 - **Command**: `File: Create and Open New Folder`
 - **Command ID**: `vscode-extended-actions.createAndOpenFolder`
 
-This command allows you to quickly create a new folder and open it in VS Code. You can choose to open it in the current window, a new window, or add it to the current workspace.
+This command allows you to quickly create a new folder and open it in the current VS Code window.
+
+The `New project...` item in `File: Open Project...` follows the same shortcuts as
+existing projects: press Enter to open the created project in the current window,
+or Cmd+Enter on macOS / Ctrl+Enter on Windows and Linux to open it in a new window.
 
 ## Usage
 

@@ -79,7 +79,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   const createAndOpenFolder = vscode.commands.registerCommand(
     "vscode-extended-actions.createAndOpenFolder",
-    async () => {
+    async (openLocation: ProjectOpenLocation = "currentWindow") => {
       const config = vscode.workspace.getConfiguration("git");
       let defaultCloneDirectory =
         config.get<string>("defaultCloneDirectory") || os.homedir();
@@ -121,50 +121,12 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      const OPEN = "Open";
-      const OPEN_NEW_WINDOW = "Open in New Window";
-      const ADD_TO_WORKSPACE = "Add to Workspace";
-
-      let message = "Would you like to open the created folder?";
-      const choices = [OPEN, OPEN_NEW_WINDOW];
-
-      if (vscode.workspace.workspaceFolders) {
-        message =
-          "Would you like to open the created folder, or add it to the current workspace?";
-        choices.push(ADD_TO_WORKSPACE);
-      }
-
-      const result = await vscode.window.showInformationMessage(
-        message,
-        { modal: true },
-        ...choices
-      );
-
-      if (!result) {
-        return;
-      }
-
       const uri = vscode.Uri.file(expandedFolderPath);
-
-      switch (result) {
-        case OPEN:
-          vscode.commands.executeCommand("vscode.openFolder", uri, {
-            forceReuseWindow: true,
-          });
-          break;
-        case OPEN_NEW_WINDOW:
-          vscode.commands.executeCommand("vscode.openFolder", uri, {
-            forceNewWindow: true,
-          });
-          break;
-        case ADD_TO_WORKSPACE:
-          vscode.workspace.updateWorkspaceFolders(
-            vscode.workspace.workspaceFolders!.length,
-            0,
-            { uri }
-          );
-          break;
-      }
+      await vscode.commands.executeCommand(
+        "vscode.openFolder",
+        uri,
+        openFolderOptions(openLocation)
+      );
     }
   );
 
@@ -343,14 +305,12 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
       const { item, openLocation } = pick;
-      const openFolderOptions =
-        openLocation === "newWindow"
-          ? { forceNewWindow: true }
-          : { forceReuseWindow: true };
+      const options = openFolderOptions(openLocation);
       switch (item.action) {
         case "new":
           await vscode.commands.executeCommand(
-            "vscode-extended-actions.createAndOpenFolder"
+            "vscode-extended-actions.createAndOpenFolder",
+            openLocation
           );
           return;
         case "folder":
@@ -360,7 +320,7 @@ export function activate(context: vscode.ExtensionContext) {
           await vscode.commands.executeCommand(
             "vscode.openFolder",
             vscode.Uri.file(item.dirPath),
-            openFolderOptions
+            options
           );
           return;
         case "devcontainer":
@@ -371,7 +331,7 @@ export function activate(context: vscode.ExtensionContext) {
               item.configFile,
               await getDockerSettings()
             ),
-            openFolderOptions
+            options
           );
           return;
         case "none":
@@ -420,6 +380,12 @@ type ProjectPickItem = vscode.QuickPickItem &
   );
 
 type ProjectOpenLocation = "currentWindow" | "newWindow";
+
+function openFolderOptions(openLocation: ProjectOpenLocation) {
+  return openLocation === "newWindow"
+    ? { forceNewWindow: true }
+    : { forceReuseWindow: true };
+}
 
 interface ProjectPickResult {
   item: ProjectPickItem;
