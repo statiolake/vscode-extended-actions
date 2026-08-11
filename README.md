@@ -14,7 +14,7 @@ Saves all dirty files without running save participants (formatters, organizers,
 This is useful when you want to save all files quickly without triggering automatic formatting.
 
 Project opening is provided by the separate
-[`Project Opener`](https://marketplace.visualstudio.com/items?itemName=statiolake.vscode-project-opener)
+[`Project Picker`](https://marketplace.visualstudio.com/items?itemName=statiolake.vscode-project-picker)
 extension. It runs as a UI extension, so project discovery and new-folder
 creation happen on the local machine even when this window is connected to a
 Dev Container or another remote host.
