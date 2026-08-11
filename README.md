@@ -13,23 +13,16 @@ Saves all dirty files without running save participants (formatters, organizers,
 
 This is useful when you want to save all files quickly without triggering automatic formatting.
 
-### Create and Open Folder
-
-Creates a new folder and opens it in VS Code.
-
-- **Command**: `File: Create and Open New Folder`
-- **Command ID**: `vscode-extended-actions.createAndOpenFolder`
-
-This command allows you to quickly create a new folder and open it in the current VS Code window.
-
-The `New project...` item in `File: Open Project...` follows the same shortcuts as
-existing projects: press Enter to open the created project in the current window,
-or Cmd+Enter on macOS / Ctrl+Enter on Windows and Linux to open it in a new window.
+Project opening is provided by the separate
+[`Project Opener`](https://marketplace.visualstudio.com/items?itemName=statiolake.vscode-project-opener)
+extension. It runs as a UI extension, so project discovery and new-folder
+creation happen on the local machine even when this window is connected to a
+Dev Container or another remote host.
 
 ## Usage
 
 1. Open the Command Palette (`Cmd+Shift+P` on macOS, `Ctrl+Shift+P` on Windows/Linux)
-2. Type "Save All Without Format" or "Create and Open New Folder"
+2. Type "Save All Without Format"
 3. Press Enter
 
 You can also assign a keyboard shortcut to this command in your keybindings.json:

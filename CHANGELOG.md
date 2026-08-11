@@ -15,7 +15,13 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
-- No unreleased changes
+## [0.7.0] - 2026-08-12
+
+### Changed
+
+- Move project opening commands to the separate `vscode-project-opener` UI
+  extension. This keeps local project discovery and folder creation out of the
+  remote extension host.
 
 ## [0.6.6] - 2026-07-31
 
